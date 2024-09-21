@@ -5,18 +5,33 @@ const Ticket = require("./models/Ticket");
 
 const app = express();
 
-require('dotenv').config();
+require("dotenv").config();
 app.use(bodyParser.json());
 const port = process.env.PORT || 3000;
 connectDB();
 
 app.post("/tickets", async (req, res) => {
   try {
-    const ticket = new Ticket(req.body);
+    const { title, description, status } = req.body;
+
+    const ticket = new Ticket({
+      title,
+      description,
+      status,
+    });
+
     await ticket.save();
-    res.status(201).send(ticket);
+
+    res.status(201).json(ticket);
   } catch (error) {
-    res.status(400).send(error);
+    if (error.name === "ValidationError") {
+      return res.status(400).json({
+        error: "Validation failed",
+        message: error.message,
+        errors: error.errors,
+      });
+    }
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -40,25 +55,49 @@ app.get("/tickets/:id", async (req, res) => {
 });
 
 app.put("/tickets/:id", async (req, res) => {
+  const ticketId = req.params.id;
+
   try {
-    const ticket = await Ticket.findByIdAndUpdate(req.params.id, req.body, {
-      new: true,
-      runValidators: true,
-    });
-    if (!ticket) return res.status(404).send();
-    res.status(200).send(ticket);
+    const ticket = await Ticket.findById(ticketId);
+
+    if (!ticket) {
+      return res.status(404).json({ error: "Ticket not found" });
+    }
+
+    ticket.title = req.body.title || ticket.title;
+    ticket.description = req.body.description || ticket.description;
+    ticket.status = req.body.status || ticket.status;
+
+    await ticket.save();
+
+    res.status(200).json(ticket);
   } catch (error) {
-    res.status(400).send(error);
+    if (error.name === "ValidationError") {
+      return res.status(400).json({
+        error: "Validation failed",
+        message: error.message,
+        errors: error.errors,
+      });
+    }
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
 app.delete("/tickets/:id", async (req, res) => {
+  const ticketId = req.params.id;
+
   try {
-    const ticket = await Ticket.findByIdAndDelete(req.params.id);
-    if (!ticket) return res.status(404).send();
-    res.status(204).send();
+    const ticket = await Ticket.findById(ticketId);
+
+    if (!ticket) {
+      return res.status(404).json({ error: "Ticket not found" });
+    }
+
+    await ticket.remove();
+
+    res.status(200).json({ message: "Ticket deleted successfully" });
   } catch (error) {
-    res.status(500).send(error);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
